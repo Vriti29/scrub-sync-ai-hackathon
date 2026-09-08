@@ -1,0 +1,1 @@
+"""ScrubSync AI: synthetic-data, voice-native interruption demonstrator."""

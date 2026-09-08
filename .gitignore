@@ -1,0 +1,10 @@
+.env
+node_modules/
+venv/
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+artifacts/
+frontend/dist/
+frontend/.env.local
