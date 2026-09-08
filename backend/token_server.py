@@ -59,6 +59,10 @@ def create_app() -> web.Application:
     async def preflight(request: web.Request) -> web.Response:
         return web.Response(status=204)
 
+    async def health(request: web.Request) -> web.Response:
+        """Unauthenticated liveness probe for Render health checks."""
+        return web.json_response({"status": "ok", "service": "scrubsync-token"})
+
     async def ensure_agent_dispatch() -> None:
         """
         Explicit agent_name workers do not auto-join rooms.
@@ -133,6 +137,8 @@ def create_app() -> web.Application:
         middlewares=[cors_and_errors],
         client_max_size=4096,
     )
+    app.router.add_get("/health", health)
+    app.router.add_get("/healthz", health)
     app.router.add_route("OPTIONS", "/token", preflight)
     app.router.add_post("/token", token)
     return app
@@ -140,8 +146,8 @@ def create_app() -> web.Application:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    web.run_app(
-        create_app(),
-        host=os.getenv("TOKEN_HOST", "127.0.0.1"),
-        port=int(os.getenv("TOKEN_PORT", "8080")),
-    )
+    # Render injects PORT and requires binding to 0.0.0.0. Fall back to the
+    # local defaults when those are absent.
+    host = os.getenv("TOKEN_HOST", "0.0.0.0")
+    port = int(os.getenv("PORT") or os.getenv("TOKEN_PORT") or "8080")
+    web.run_app(create_app(), host=host, port=port)
