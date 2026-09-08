@@ -7,7 +7,7 @@ export function MetricReadout({
 }) {
   if (!result) {
     return (
-      <section className="flex min-h-80 flex-col justify-center rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-8 backdrop-blur-md shadow-xl">
+      <section style={{"display": "none"}} className="flex min-h-80 flex-col justify-center rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-8 backdrop-blur-md shadow-xl">
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
           <span className="font-mono text-xs uppercase tracking-widest text-cyan-400">
             Telemetry Vitals · EHR Core
