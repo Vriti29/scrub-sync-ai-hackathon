@@ -1,0 +1,119 @@
+{
+  "measurement_boundary": "Python task cancellation and fenced queue commit",
+  "clock": "time.perf_counter_ns",
+  "trial_count": 10,
+  "cancellation_p50_ms": 0.3205205,
+  "cancellation_max_ms": 0.528042,
+  "trials": [
+    {
+      "trial": 1,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.528042,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 2,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.1165,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 3,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.293375,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 4,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.445959,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 5,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.433792,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 6,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.134291,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 7,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.222958,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 8,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.347666,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 9,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.237125,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    },
+    {
+      "trial": 10,
+      "tool_delay_ms": 2500,
+      "interrupt_after_ms": 500,
+      "cancellation_ms": 0.451542,
+      "stale_commit_rejected": true,
+      "stale_audio_queue_items": 0,
+      "rime_ttfa_ms": null,
+      "vad_acoustic_latency_ms": null,
+      "acoustic_cutoff_ms": null
+    }
+  ]
+}
