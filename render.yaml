@@ -1,0 +1,62 @@
+# Render Blueprint for ScrubSync backend.
+# Deploys two services:
+#   1. scrubsync-token  — HTTP token server (Web Service, has /health)
+#   2. scrubsync-agent   — LiveKit voice worker (Background Worker, no port)
+#
+# Set every `sync: false` variable in the Render dashboard (they are secrets
+# and are intentionally NOT stored in this file). Do NOT set PORT — Render
+# injects it and the token server reads it automatically.
+
+services:
+  # ----- HTTP token server (Web Service) -----
+  - type: web
+    name: scrubsync-token
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m backend.token_server
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: TERMINAL_ACCESS_SECRET
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: ROOM_NAME
+        value: scrubsync-demo
+
+  # ----- LiveKit voice agent (Background Worker) -----
+  - type: worker
+    name: scrubsync-agent
+    runtime: python
+    plan: starter          # Background Workers require a paid plan (no free tier)
+    buildCommand: pip install -r requirements.txt && python -m backend.agent download-files
+    startCommand: python -m backend.agent start
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: RIME_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: OPENAI_API_BASE
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: QWEN_MODEL
+        sync: false
+      - key: ROOM_NAME
+        value: scrubsync-demo
