@@ -19,18 +19,18 @@ export default function App() {
 
   return (
     <main className="mx-auto min-h-screen max-w-[1800px] px-6 py-8 lg:px-12">
-      <header className="flex flex-wrap items-center justify-between gap-5 border-b border-slate-800 pb-6">
+      <header className="flex flex-wrap items-center justify-between gap-5 border-b border-white/10 pb-6">
         <div>
-          <p className="text-sm font-bold tracking-[0.25em] text-cyan-300">
+          <p className="text-sm font-semibold tracking-[0.25em] text-zinc-500">
             TEAM HTTP200 · DATAFORGE · RIME TRACK
           </p>
           <h1 className="mt-3 text-4xl font-black tracking-tight lg:text-5xl">
-            ScrubSync <span className="text-cyan-300">AI</span>
+            ScrubSync <span className="text-zinc-500">AI</span>
           </h1>
         </div>
         <div className="text-right">
-          <p className="font-mono text-lg text-slate-200">Voice assistant</p>
-          <p className="mt-1 text-sm text-amber-300">
+          <p className="font-mono text-lg text-zinc-200">Voice assistant</p>
+          <p className="mt-1 text-sm text-zinc-500">
             Ask anything · Live web lookup when needed · Not professional advice
           </p>
         </div>
@@ -42,7 +42,7 @@ export default function App() {
           className="panel mt-8 flex flex-wrap items-end gap-4"
         >
           <label className="flex min-w-64 flex-1 flex-col gap-2">
-            <span className="text-sm font-semibold text-slate-300">
+            <span className="text-sm font-semibold text-zinc-300">
               Pre-sterile terminal provisioning secret
             </span>
             <input
@@ -52,17 +52,13 @@ export default function App() {
               autoComplete="off"
               required
               disabled={terminal.connecting}
-              className="rounded-lg border border-slate-600 bg-slate-950 px-4 py-3 text-lg outline-none focus:border-cyan-400"
+              className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-lg text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-white/40"
             />
           </label>
-          <button
-            type="submit"
-            disabled={terminal.connecting}
-            className="rounded-lg bg-cyan-300 px-7 py-3 text-lg font-extrabold text-slate-950 disabled:opacity-50"
-          >
+          <button type="submit" disabled={terminal.connecting} className="btn-primary">
             {terminal.connecting ? "Connecting…" : "Arm hands-free terminal"}
           </button>
-          <p className="w-full text-sm text-slate-400">
+          <p className="w-full text-sm text-zinc-500">
             Arm the terminal, then ask anything by voice — health, recipes,
             cricket scores, personal advice, and more. Interrupt anytime.
           </p>
@@ -72,7 +68,7 @@ export default function App() {
       {terminal.error && (
         <div
           role="alert"
-          className="mt-6 rounded-xl border border-rose-700 bg-rose-950/40 p-5 text-xl text-rose-200"
+          className="mt-6 rounded-xl border border-white/20 bg-white/[0.04] p-5 text-xl text-zinc-100 backdrop-blur-xl"
         >
           {terminal.error}
         </div>
@@ -84,15 +80,16 @@ export default function App() {
           <MetricReadout result={terminal.result} />
           <section className="panel">
             <p className="eyebrow">Voice pipeline · judge’s view</p>
-            <p className="mt-4 min-h-8 text-xl text-slate-200">
+            <p className="mt-4 min-h-8 text-xl text-zinc-100">
               {terminal.transcript ||
                 terminal.tool ||
                 "Ask anything — health, food, sports, advice…"}
             </p>
-            <p className="mt-5 text-sm font-bold uppercase tracking-wider text-violet-300">
+            <div className="mt-5 h-px w-full bg-white/10" />
+            <p className="mt-5 text-sm font-semibold uppercase tracking-wider text-zinc-500">
               Intended speech, not a word-level heard transcript
             </p>
-            <p className="mt-2 min-h-7 text-xl text-slate-300">
+            <p className="mt-2 min-h-7 text-xl text-zinc-300">
               {terminal.intendedSpeech || "No authorized speech segment"}
             </p>
           </section>
@@ -106,19 +103,36 @@ export default function App() {
         connected={terminal.connected}
       />
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-500">
+      <div className="mt-6 pb-20 text-sm text-zinc-600">
         <p>
           Hands busy. Eyes busy. Voice required. Stale epochs have no playback authority.
         </p>
-        {terminal.connected && (
-          <button
-            onClick={() => void terminal.disconnect()}
-            className="rounded border border-slate-700 px-4 py-2 text-slate-300"
-          >
-            Disarm terminal
-          </button>
-        )}
       </div>
+
+      {terminal.connected && (
+        <button
+          onClick={() => void terminal.disconnect()}
+          className="disarm-fab"
+          aria-label="Disarm terminal"
+          title="Disarm terminal"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 2v10" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+          </svg>
+          Disarm terminal
+        </button>
+      )}
     </main>
   );
 }

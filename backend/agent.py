@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -52,7 +53,7 @@ Tools:
 
 Memory & Continuity:
 - Remember all previous context, patient details, and topics discussed earlier in this session.
-- If the user says "continue", "go on", or "resume", pick up exactly where you left off without restarting.
+- Soft pause/resume ("stop", "pause", "continue", "go on", "resume") is handled by the voice runtime without asking you; you will not see those turns.
 - If the user interrupts, changes the subject, or says "leave it", immediately abandon the previous topic and address the new request.
 
 CRITICAL SESSION MEMORY RULES:
@@ -85,6 +86,52 @@ Safety:
 """.strip()
 
 MAX_SPOKEN_WORDS = int(os.getenv("MAX_SPOKEN_WORDS", "110"))
+# Approximate Rime mist/amber conversational rate for mid-sentence resume splits.
+TTS_WORDS_PER_SEC = float(os.getenv("TTS_WORDS_PER_SEC", "2.6"))
+# AudioSource playout jitter buffer (ms). Large enough that a synthesis or
+# event-loop hiccup never drains the queue mid-sentence — an empty queue makes
+# LiveKit emit concealment noise (the "whoosh"). Cleared instantly on barge-in.
+TTS_QUEUE_MS = int(os.getenv("TTS_QUEUE_MS", "400"))
+# Seconds of queued-but-unplayed audio to assume when the live queue depth is
+# unavailable; used only as a fallback for the resume cursor.
+TTS_QUEUE_TAIL_SEC = TTS_QUEUE_MS / 1000.0
+
+SOFT_PAUSE_PHRASES = frozenset(
+    {
+        "stop",
+        "pause",
+        "hold on",
+        "hold on a second",
+        "hold on a sec",
+        "wait",
+        "wait a second",
+        "wait a sec",
+        "one second",
+        "hang on",
+        "hang on a second",
+    }
+)
+RESUME_PHRASES = frozenset(
+    {
+        "continue",
+        "go on",
+        "resume",
+        "keep going",
+        "go ahead",
+        "carry on",
+    }
+)
+HARD_CANCEL_PHRASES = frozenset(
+    {
+        "cancel",
+        "cancel that",
+        "abort",
+        "leave it",
+        "stop that",
+        "never mind",
+        "nevermind",
+    }
+)
 
 
 def required(name: str) -> str:
@@ -92,6 +139,102 @@ def required(name: str) -> str:
     if not value:
         raise RuntimeError(f"Missing environment variable: {name}")
     return value
+
+
+def normalize_command(text: str) -> str:
+    return "".join(
+        ch for ch in text.lower().strip() if ch.isalnum() or ch.isspace()
+    ).strip()
+
+
+def _command_match(clean: str, phrases: frozenset[str]) -> bool:
+    if not clean:
+        return False
+    if clean in phrases:
+        return True
+    # Tolerate STT extras: "please continue", "continue please", "can you continue"
+    for prefix in ("please ", "can you ", "could you ", "just "):
+        if clean.startswith(prefix) and clean[len(prefix) :] in phrases:
+            return True
+    for suffix in (" please", " now"):
+        if clean.endswith(suffix) and clean[: -len(suffix)] in phrases:
+            return True
+    return False
+
+
+def is_soft_pause_command(text: str) -> bool:
+    return _command_match(normalize_command(text), SOFT_PAUSE_PHRASES)
+
+
+def is_resume_command(text: str) -> bool:
+    clean = normalize_command(text)
+    if _command_match(clean, RESUME_PHRASES):
+        return True
+    # Tolerate short STT variants: "continue please", "uh continue", "continue that"
+    words = clean.split()
+    if not words or len(words) > 5:
+        return False
+    return any(word in RESUME_PHRASES for word in words) and not any(
+        word in {"cancel", "stop", "abort", "leave"} for word in words
+    )
+
+
+def is_hard_cancel_command(text: str) -> bool:
+    return _command_match(normalize_command(text), HARD_CANCEL_PHRASES)
+
+
+def split_speakable_units(text: str) -> list[str]:
+    """Split into sentence-like units so pause/resume can be exact without an LLM."""
+    cleaned = " ".join(text.split()).strip()
+    if not cleaned:
+        return []
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    units = [part.strip() for part in parts if part.strip()]
+    return units or [cleaned]
+
+
+class _AudioBuffer:
+    """Full synthesized PCM for one utterance, filled ahead of playout.
+
+    Rime streams frames faster than real time, so by the time a user says
+    "stop" a few seconds in, the entire utterance is already buffered here.
+    "continue" then replays the unspoken frames instantly from memory.
+    """
+
+    __slots__ = ("frames", "total_samples", "complete", "failed", "text", "sample_rate")
+
+    def __init__(self, text: str, sample_rate: int = 24000) -> None:
+        self.frames: list[rtc.AudioFrame] = []
+        self.total_samples = 0
+        self.complete = asyncio.Event()
+        self.failed = False
+        self.text = text
+        self.sample_rate = sample_rate
+
+
+def remaining_speech_from_progress(
+    text: str,
+    played_samples: int,
+    sample_rate: int = 24000,
+    started_mono: float | None = None,
+) -> str:
+    """Estimate unspoken suffix from PCM and/or wall-clock progress."""
+    words = text.split()
+    if not words:
+        return ""
+    sample_s = max(0.0, (played_samples / max(sample_rate, 1)) - TTS_QUEUE_TAIL_SEC)
+    clock_s = 0.0
+    if started_mono is not None:
+        clock_s = max(0.0, time.monotonic() - started_mono)
+    # Prefer the smaller progress estimate so we keep more leftover text.
+    played_s = min(sample_s, clock_s) if started_mono is not None else sample_s
+    if started_mono is not None and played_samples <= 0:
+        played_s = clock_s
+    spoken = int(played_s * TTS_WORDS_PER_SEC)
+    spoken = max(0, spoken - 1)
+    if spoken >= len(words):
+        return ""
+    return " ".join(words[spoken:])
 
 
 class Audit:
@@ -181,6 +324,15 @@ class VoiceAssistant:
         self._sources: dict[str, rtc.AudioSource] = {}
         self._publications: dict[str, rtc.LocalTrackPublication] = {}
         self._seen_interrupt_ids: set[str] = set()
+        # Mid-utterance pause/resume: active playout bookkeeping + leftover text.
+        self._active_speech: dict[str, Any] | None = None
+        self._remaining_speech: str | None = None
+        # Instant resume: cached PCM of the current utterance + play cursor.
+        # On "stop" we keep the synthesized frames so "continue" replays the
+        # unspoken tail straight from memory — no Rime round-trip, no LLM.
+        self._pending_buffer: _AudioBuffer | None = None
+        self._pending_cursor: int = 0
+        self._synth_task: asyncio.Task[Any] | None = None
 
     def on(self, name: str):
         def register(callback: Callable[..., None]):
@@ -228,16 +380,98 @@ class VoiceAssistant:
             )
         )
 
+    def _has_pending_audio(self) -> bool:
+        """True when there is unspoken buffered PCM available for instant resume."""
+        buf = self._pending_buffer
+        if buf is None:
+            return False
+        return self._pending_cursor < buf.total_samples or not buf.complete.is_set()
+
+    def _capture_remaining_speech(self) -> None:
+        """Snapshot the unspoken PCM cursor the instant playback is cut.
+
+        We keep the whole synthesized buffer and just remember how far playout
+        got. "continue" replays frames from that cursor with no re-synthesis.
+        A word-estimated text tail is kept only for the HUD / audit and for the
+        "already finished" fallback.
+        """
+        active = self._active_speech
+        if not active:
+            return
+
+        buf = active.get("buffer")
+        played = int(active.get("played_samples") or 0)
+        source = active.get("source")
+        self._active_speech = None
+
+        if not isinstance(buf, _AudioBuffer):
+            return
+
+        # Resume exactly at the acoustic cut. Frames we captured but that were
+        # still queued (not yet played) get dropped by clear_queue() and never
+        # reach the ear, so subtract the live queue depth rather than a guess.
+        queued_s = TTS_QUEUE_TAIL_SEC
+        if source is not None:
+            try:
+                queued_s = max(0.0, float(source.queued_duration))
+            except Exception:
+                queued_s = TTS_QUEUE_TAIL_SEC
+        cursor = max(0, played - int(queued_s * buf.sample_rate))
+        self._pending_buffer = buf
+        self._pending_cursor = cursor
+
+        remaining_text = remaining_speech_from_progress(
+            buf.text, cursor, buf.sample_rate
+        ).strip()
+        self._remaining_speech = remaining_text or buf.text.strip() or None
+
+        self.audit.write(
+            "speech_paused",
+            played_samples=played,
+            cursor_samples=cursor,
+            buffered_samples=buf.total_samples,
+            synth_complete=buf.complete.is_set(),
+            remaining_words=len(self._remaining_speech.split())
+            if self._remaining_speech
+            else 0,
+            had_remaining=self._has_pending_audio(),
+            remaining_preview=(
+                self._remaining_speech[:180] if self._remaining_speech else ""
+            ),
+        )
+
+    def _discard_pending_audio(self) -> None:
+        """Drop any paused buffer + stop its synthesis (a new request abandons it)."""
+        task = self._synth_task
+        self._synth_task = None
+        if task is not None and not task.done():
+            task.cancel()
+        self._pending_buffer = None
+        self._pending_cursor = 0
+        self._remaining_speech = None
+
     def interrupt(self, source: str, request_id: str | None = None) -> int:
+        self._capture_remaining_speech()
         epoch = self.epochs.advance_epoch()
-        for audio_source in tuple(self._sources.values()):
-            audio_source.clear_queue()
         self.audit.write(
             "interrupt",
             epoch=epoch,
             source=source,
             request_id=request_id,
+            has_remaining=self._has_pending_audio(),
+            remaining_words=len(self._remaining_speech.split())
+            if self._remaining_speech
+            else 0,
         )
+        # clear_queue must not prevent interrupt bookkeeping / STT handoff
+        try:
+            for audio_source in tuple(self._sources.values()):
+                try:
+                    audio_source.clear_queue()
+                except Exception:
+                    log.exception("AudioSource.clear_queue failed during interrupt")
+        except Exception:
+            log.exception("Failed clearing audio sources during interrupt")
         self.spawn(
             self.publish(
                 {
@@ -436,10 +670,31 @@ class VoiceAssistant:
             text = " ".join(pieces).strip()
             if text and self.epochs.is_current(epoch):
                 self.audit.write("transcript", epoch=epoch, text=text)
-                
+
+                # Soft pause: barge-in already stopped audio and saved remaining text.
+                if is_soft_pause_command(text):
+                    self.audit.write(
+                        "command_route",
+                        epoch=epoch,
+                        route="soft_pause",
+                        has_remaining=bool(self._remaining_speech),
+                    )
+                    self.state(epoch, "listening")
+                    return
+
+                # Instant resume: replay buffered PCM — no LLM, no re-synthesis.
+                if is_resume_command(text):
+                    await self._resume_playback(epoch, route="resume")
+                    return
+
                 # TC-2: Instant fast-abort on cancel/abort phrases (<100ms)
-                clean_text = text.lower().strip()
-                if clean_text in {"cancel", "cancel that", "abort", "leave it", "stop that", "never mind"}:
+                if is_hard_cancel_command(text):
+                    self._discard_pending_audio()
+                    self.audit.write(
+                        "command_route",
+                        epoch=epoch,
+                        route="hard_cancel",
+                    )
                     # Advance epoch to invalidate any pending tasks
                     new_epoch = self.epochs.advance_epoch()
                     # Purana transcript aur audio chunks ka queue turant drain karo
@@ -454,6 +709,13 @@ class VoiceAssistant:
                     self._remember(text, "Cancelled.")
                     return
 
+                # New request abandons any paused leftover.
+                self._discard_pending_audio()
+                self.audit.write(
+                    "command_route",
+                    epoch=epoch,
+                    route="respond",
+                )
                 await self.epochs.run_fenced_task(epoch, self.respond(epoch, text))
             elif text:
                 self.audit.write("stale_transcript_rejected", epoch=epoch)
@@ -469,6 +731,21 @@ class VoiceAssistant:
 
     async def respond(self, epoch: int, transcript: str) -> None:
         self.epochs.assert_current(epoch)
+
+        # Defense in depth: never LLM-plan pause/resume even if routing missed.
+        if is_soft_pause_command(transcript):
+            self.audit.write(
+                "command_route",
+                epoch=epoch,
+                route="soft_pause_respond_guard",
+                has_remaining=bool(self._remaining_speech),
+            )
+            self.state(epoch, "listening")
+            return
+        if is_resume_command(transcript):
+            await self._resume_playback(epoch, route="resume_respond_guard")
+            return
+
         self.state(epoch, "tool", tool="Planning response")
 
         @llm.function_tool
@@ -661,17 +938,145 @@ class VoiceAssistant:
         if overflow > 0:
             self._history = self._history[overflow:]
 
+    def _start_synthesis(self, text: str) -> _AudioBuffer:
+        """Synthesize the whole utterance into a buffer, ahead of playout.
+
+        Rime streams faster than real time, so the buffer typically holds the
+        entire answer within a couple of seconds — long before a "stop" lands —
+        which is what makes "continue" resume instantly from memory. Filling is
+        deliberately NOT epoch-fenced: it keeps running through a pause so the
+        unspoken tail is available to replay.
+        """
+        self._discard_pending_audio()
+        buf = _AudioBuffer(text)
+        started_ns = time.perf_counter_ns()
+
+        async def fill() -> None:
+            first = True
+            try:
+                async with asyncio.timeout(60):
+                    async with self.tts.synthesize(text) as synthesis:
+                        async for event in synthesis:
+                            frame = event.frame
+                            if (
+                                frame.sample_rate != buf.sample_rate
+                                or frame.num_channels != 1
+                            ):
+                                raise RuntimeError(
+                                    "Rime returned an unexpected PCM configuration."
+                                )
+                            if first:
+                                first = False
+                                self.audit.write(
+                                    "rime_first_pcm",
+                                    text_preview=text[:80],
+                                    elapsed_ms=(
+                                        time.perf_counter_ns() - started_ns
+                                    ) / 1e6,
+                                )
+                            buf.frames.append(frame)
+                            buf.total_samples += frame.samples_per_channel
+            except asyncio.CancelledError:
+                buf.failed = True
+                raise
+            except Exception:
+                buf.failed = True
+                log.exception("Rime synthesis failed")
+            finally:
+                buf.complete.set()
+
+        self._synth_task = self.spawn(fill())
+        return buf
+
     async def speak(self, epoch: int, text: str) -> None:
+        """Speak a fresh answer, buffering PCM so stop/continue can replay it."""
+        self.epochs.assert_current(epoch)
+        units = split_speakable_units(text)
+        if not units:
+            return
+
+        self.audit.write(
+            "speech_intended",
+            epoch=epoch,
+            text=text,
+            unit_count=len(units),
+        )
+        buf = self._start_synthesis(text)
+        await self._play_buffer(epoch, buf, 0)
+
+    async def _resume_playback(self, epoch: int, *, route: str) -> None:
+        """Replay the unspoken buffered PCM from the pause cursor — no LLM/TTS."""
+        buf = self._pending_buffer
+        cursor = self._pending_cursor
+        remaining_words = (
+            len(self._remaining_speech.split()) if self._remaining_speech else 0
+        )
+        has_pending = self._has_pending_audio()
+        self.audit.write(
+            "command_route",
+            epoch=epoch,
+            route=route,
+            has_remaining=has_pending,
+            remaining_words=remaining_words,
+        )
+        if buf is not None and has_pending:
+            self.audit.write(
+                "speech_resume",
+                epoch=epoch,
+                cursor_samples=cursor,
+                buffered_samples=buf.total_samples,
+                remaining_words=remaining_words,
+            )
+            # Keep the buffer/synth alive; _play_buffer owns it now.
+            self._pending_buffer = None
+            self._pending_cursor = 0
+            self._remaining_speech = None
+            await self.epochs.run_fenced_task(
+                epoch, self._play_buffer(epoch, buf, cursor)
+            )
+        else:
+            self._discard_pending_audio()
+            await self.epochs.run_fenced_task(
+                epoch,
+                self.speak(
+                    epoch,
+                    "I had already finished. What would you like next?",
+                ),
+            )
+
+    async def _play_buffer(
+        self, epoch: int, buf: _AudioBuffer, start_samples: int
+    ) -> None:
+        """Stream buffered PCM from ``start_samples`` at real-time pace.
+
+        On interrupt we record how far playout got (``played_samples``) so the
+        next "continue" resumes from exactly there. Frames already in ``buf``
+        play with zero latency; if synthesis is still in flight we simply wait
+        for the next frame — still no LLM and no second Rime request.
+        """
         self.epochs.assert_current(epoch)
         segment_id = uuid.uuid4().hex
         track_name = f"rime.e{epoch}.s{segment_id}"
-        source = rtc.AudioSource(24000, 1, queue_size_ms=100)
+        # A generous jitter buffer keeps playout continuous even if synthesis or
+        # the event loop hiccups mid-sentence — an empty queue makes LiveKit
+        # emit concealment noise (the "whoosh"). Barge-in still cuts instantly
+        # because interrupt() calls clear_queue(), and the resume cursor is
+        # corrected by the live queue depth, so a larger queue is safe here.
+        source = rtc.AudioSource(buf.sample_rate, 1, queue_size_ms=TTS_QUEUE_MS)
         track = rtc.LocalAudioTrack.create_audio_track(track_name, source)
         publication: rtc.LocalTrackPublication | None = None
-        total_samples = 0
-        tts_started_ns = time.perf_counter_ns()
-        first_frame = True
+        played_samples = start_samples
         interrupted = True
+        hud_text = (
+            remaining_speech_from_progress(buf.text, start_samples, buf.sample_rate)
+            or buf.text
+        )
+        self._active_speech = {
+            "buffer": buf,
+            "played_samples": start_samples,
+            "segment_id": segment_id,
+            "source": source,
+        }
 
         try:
             self._sources[segment_id] = source
@@ -687,7 +1092,7 @@ class VoiceAssistant:
                     "epoch": epoch,
                     "segment_id": segment_id,
                     "track_name": track_name,
-                    "text": text,
+                    "text": hud_text,
                     "engine": "Rime",
                     "model": "mist",
                     "speaker": "amber",
@@ -696,55 +1101,61 @@ class VoiceAssistant:
             )
             self.epochs.assert_current(epoch)
             self.state(epoch, "speaking")
-            self.audit.write(
-                "speech_intended",
-                epoch=epoch,
-                segment_id=segment_id,
-                text=text,
-            )
 
-            async with asyncio.timeout(40):
-                async with self.tts.synthesize(text) as synthesis:
-                    async for event in synthesis:
-                        self.epochs.assert_current(epoch)
-                        frame = event.frame
-                        if frame.sample_rate != 24000 or frame.num_channels != 1:
-                            raise RuntimeError(
-                                "Rime returned an unexpected PCM configuration."
-                            )
-                        if first_frame:
-                            first_frame = False
-                            self.audit.write(
-                                "rime_first_pcm",
-                                epoch=epoch,
-                                segment_id=segment_id,
-                                elapsed_ms=(
-                                    time.perf_counter_ns() - tts_started_ns
-                                ) / 1e6,
-                            )
-                        # Cancellation can occur while capture_frame awaits.
-                        # The independently epoch-gated terminal is the final
-                        # authority if an old RTP frame remains in transit.
+            # Find the first frame at/after the resume cursor. We start on a
+            # frame boundary at or before the cursor, so at most a few ms are
+            # re-heard rather than dropped.
+            index = 0
+            consumed = 0
+            while index < len(buf.frames) and (
+                consumed + buf.frames[index].samples_per_channel <= start_samples
+            ):
+                consumed += buf.frames[index].samples_per_channel
+                index += 1
+
+            async with asyncio.timeout(120):
+                while True:
+                    self.epochs.assert_current(epoch)
+                    if index < len(buf.frames):
+                        frame = buf.frames[index]
+                        index += 1
                         await source.capture_frame(frame)
                         self.epochs.assert_current(epoch)
-                        total_samples += frame.samples_per_channel
+                        played_samples += frame.samples_per_channel
+                        if self._active_speech is not None:
+                            self._active_speech["played_samples"] = played_samples
+                    elif buf.complete.is_set():
+                        if buf.failed and played_samples == start_samples:
+                            raise RuntimeError("Rime synthesis produced no audio.")
+                        break
+                    else:
+                        # Synthesis still streaming; wait for the next frame.
+                        await asyncio.sleep(0.01)
                 await source.wait_for_playout()
                 self.epochs.assert_current(epoch)
 
             interrupted = False
+            self._active_speech = None
+            self._discard_pending_audio()
             await self.publish(
                 {
                     "type": "AUDIO_END",
                     "epoch": epoch,
                     "segment_id": segment_id,
-                    "generated_samples": total_samples,
+                    "generated_samples": played_samples,
                 }
             )
-            # A short subscription/jitter tail. The terminal independently
-            # mutes immediately on a new local speech event.
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.05)
             self.epochs.assert_current(epoch)
             self.state(epoch, "listening")
+        except (StaleEpochException, asyncio.CancelledError):
+            if (
+                self._active_speech is not None
+                and self._active_speech.get("segment_id") == segment_id
+            ):
+                self._active_speech["played_samples"] = played_samples
+                self._capture_remaining_speech()
+            raise
         finally:
             source.clear_queue()
             self._sources.pop(segment_id, None)
@@ -753,7 +1164,7 @@ class VoiceAssistant:
                 "speech_closed",
                 epoch=epoch,
                 segment_id=segment_id,
-                generated_samples=total_samples,
+                generated_samples=played_samples,
                 interrupted=interrupted,
             )
             if publication is not None:

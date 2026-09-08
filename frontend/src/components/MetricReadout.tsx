@@ -9,10 +9,10 @@ export function MetricReadout({
     return (
       <section className="panel flex min-h-80 flex-col justify-center">
         <p className="eyebrow">Latest authorized result</p>
-        <p className="mt-8 text-4xl font-semibold text-slate-300">
+        <p className="mt-8 text-4xl font-semibold text-zinc-200">
           Awaiting voice request
         </p>
-        <p className="mt-6 text-lg text-slate-400">
+        <p className="mt-6 text-lg text-zinc-500">
           “Check electrolytes.” Then interrupt: “Check blood gas pH instead.”
         </p>
       </section>
@@ -29,27 +29,27 @@ export function MetricReadout({
         <p className="eyebrow">
           {potassium ? "Potassium · K+" : "Arterial blood gas · pH"}
         </p>
-        <span className="rounded border border-amber-700 px-3 py-1 text-sm font-bold text-amber-300">
-          SYNTHETIC DEMO
+        <span className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-bold uppercase tracking-wider text-zinc-300">
+          Synthetic demo
         </span>
       </div>
       <div className="mt-7 flex flex-wrap items-baseline gap-5">
         <span className="font-mono text-[clamp(5rem,10vw,9rem)] font-black leading-none tracking-tighter text-white">
           {potassium ? metric.value.toFixed(1) : metric.value.toFixed(2)}
         </span>
-        <span className="font-mono text-3xl text-slate-300">
+        <span className="font-mono text-3xl text-zinc-400">
           {metric.unit}
         </span>
       </div>
-      <div className="mt-7 inline-block rounded-lg bg-rose-500/15 px-5 py-3 text-2xl font-extrabold tracking-wide text-rose-300">
+      <div className="mt-7 inline-block rounded-lg border border-white/20 bg-white/[0.06] px-5 py-3 text-2xl font-extrabold tracking-wide text-white">
         {metric.flag}
       </div>
       {!potassium && result.pco2 && (
-        <p className="mt-5 font-mono text-2xl text-slate-200">
+        <p className="mt-5 font-mono text-2xl text-zinc-200">
           pCO₂ {result.pco2.value} {result.pco2.unit}
         </p>
       )}
-      <p className="mt-5 text-sm text-slate-400">
+      <p className="mt-5 text-sm text-zinc-500">
         Fixture flag, not a validated diagnostic or treatment recommendation.
       </p>
     </section>

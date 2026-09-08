@@ -5,8 +5,8 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, sans-serif;
-  background: #020617;
-  color: #f8fafc;
+  background: #08080a;
+  color: #fafafa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,9 +15,12 @@
 body {
   margin: 0;
   min-width: 360px;
+  /* Monochromatic depth: soft white light source, fading vignette. */
   background:
-    radial-gradient(ellipse at 10% 5%, rgb(8 145 178 / 9%), transparent 45%),
-    #020617;
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgb(255 255 255 / 6%), transparent 60%),
+    radial-gradient(ellipse 90% 60% at 100% 0%, rgb(255 255 255 / 4%), transparent 55%),
+    #08080a;
+  background-attachment: fixed;
 }
 
 button,
@@ -25,24 +28,65 @@ input {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid #67e8f9;
-  outline-offset: 4px;
+  outline: 2px solid rgb(255 255 255 / 70%);
+  outline-offset: 3px;
 }
 
 @layer components {
   .panel {
-    @apply rounded-2xl border border-slate-700 bg-slate-900/70 p-7;
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] p-7 shadow-[0_1px_0_0_rgb(255_255_255/6%)_inset,0_20px_45px_-25px_rgb(0_0_0/80%)] backdrop-blur-xl;
   }
 
   .eyebrow {
-    @apply text-xs font-bold uppercase tracking-[0.18em] text-slate-400;
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500;
+  }
+
+  /* Primary action: bright, high-contrast, tactile. */
+  .btn-primary {
+    @apply rounded-xl bg-zinc-100 px-7 py-3 text-lg font-bold text-zinc-950 transition
+           hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  /* Floating disarm control, bottom-right. */
+  .disarm-fab {
+    @apply fixed bottom-6 right-6 z-50 inline-flex items-center gap-2.5 rounded-full
+           border border-white/15 bg-zinc-950/70 px-5 py-3 text-sm font-semibold
+           text-zinc-200 shadow-[0_10px_40px_-10px_rgb(0_0_0/90%)] backdrop-blur-xl
+           transition duration-200 hover:border-white/40 hover:bg-zinc-900/80
+           hover:text-white active:scale-95;
+  }
+
+  .disarm-fab::before {
+    content: "";
+    @apply h-2 w-2 rounded-full bg-zinc-400 transition;
+    box-shadow: 0 0 10px 1px rgb(255 255 255 / 40%);
+    animation: disarm-pulse 2.4s ease-in-out infinite;
+  }
+
+  .disarm-fab:hover::before {
+    @apply bg-white;
+    box-shadow: 0 0 14px 2px rgb(255 255 255 / 70%);
+  }
+}
+
+@keyframes disarm-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
 .beacon-active {
-  animation: beacon-pulse 2s ease-in-out infinite;
+  animation: beacon-pulse 2.6s ease-in-out infinite;
 }
 
 @keyframes beacon-pulse {
@@ -53,13 +97,14 @@ input:focus-visible {
   }
 
   50% {
-    transform: scale(1.025);
-    opacity: 0.8;
+    transform: scale(1.03);
+    opacity: 0.82;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .beacon-active {
+  .beacon-active,
+  .disarm-fab::before {
     animation: none;
   }
 }

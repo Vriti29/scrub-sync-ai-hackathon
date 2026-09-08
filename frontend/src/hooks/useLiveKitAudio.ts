@@ -239,8 +239,11 @@ export function useLiveKitAudio() {
         }
 
         // Resume in the user activation handler, before network work.
+        // Use the hardware-native sample rate. Forcing 24 kHz made the browser
+        // resample the whole output graph, which on many devices produces a
+        // continuous "whoosh" artifact. The gate worklet derives its timing
+        // from the `sampleRate` global, so it adapts to whatever rate we get.
         context = new AudioContext({
-          sampleRate: 24000,
           latencyHint: "interactive"
         });
         await context.resume();

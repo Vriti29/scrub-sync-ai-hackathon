@@ -1,38 +1,40 @@
 import type { VoiceState } from "../hooks/useLiveKitAudio";
 
+// Monochromatic system: states read through brightness + glow intensity,
+// not hue. Dimmer/quieter = idle, brighter/stronger = active.
 const states: Record<
   VoiceState,
   { label: string; color: string; glow: string }
 > = {
   offline: {
     label: "Terminal offline",
-    color: "border-slate-600 text-slate-400",
+    color: "border-zinc-800 text-zinc-600",
     glow: "none"
   },
   listening: {
     label: "Listening",
-    color: "border-cyan-400 text-cyan-300",
-    glow: "0 0 70px rgb(34 211 238 / 25%)"
+    color: "border-zinc-500 text-zinc-300",
+    glow: "0 0 70px rgb(255 255 255 / 10%)"
   },
   user: {
-    label: "Surgeon speaking",
-    color: "border-emerald-400 text-emerald-300",
-    glow: "0 0 90px rgb(52 211 153 / 30%)"
+    label: "ScrubSync listening",
+    color: "border-zinc-300 text-zinc-100",
+    glow: "0 0 90px rgb(255 255 255 / 18%)"
   },
   tool: {
-    label: "Clinical tool active",
-    color: "border-amber-400 text-amber-300",
-    glow: "0 0 90px rgb(251 191 36 / 30%)"
+    label: "ScrubSync thinking",
+    color: "border-zinc-400 text-zinc-200",
+    glow: "0 0 90px rgb(255 255 255 / 14%)"
   },
   speaking: {
-    label: "Rime speaking",
-    color: "border-violet-400 text-violet-300",
-    glow: "0 0 90px rgb(167 139 250 / 30%)"
+    label: "ScrubSync speaking",
+    color: "border-white text-white",
+    glow: "0 0 110px rgb(255 255 255 / 26%)"
   },
   error: {
     label: "Attention required",
-    color: "border-rose-400 text-rose-300",
-    glow: "0 0 70px rgb(251 113 133 / 25%)"
+    color: "border-zinc-200 border-dashed text-zinc-100",
+    glow: "0 0 80px rgb(255 255 255 / 20%)"
   }
 };
 
@@ -44,7 +46,7 @@ export function StatusBeacon({ state }: { state: VoiceState }) {
       aria-label={`Voice status: ${appearance.label}`}
     >
       <div
-        className={`beacon flex h-64 w-64 items-center justify-center rounded-full border-[10px] ${appearance.color} ${
+        className={`beacon flex h-64 w-64 items-center justify-center rounded-full border-[6px] bg-white/[0.02] backdrop-blur-sm ${appearance.color} ${
           state !== "offline" ? "beacon-active" : ""
         }`}
         style={{ boxShadow: appearance.glow }}
