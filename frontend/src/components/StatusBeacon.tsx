@@ -12,7 +12,7 @@ const states: Record<
     badgeBg: "bg-zinc-800 text-zinc-500"
   },
   listening: {
-    label: "Listening for Ingest",
+    label: "Waiting ...",
     border: "border-cyan-500/50 bg-cyan-950/20",
     text: "text-cyan-300",
     glow: "0 0 60px rgba(6, 182, 212, 0.25)",
