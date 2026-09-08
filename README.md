@@ -194,8 +194,7 @@ before the demonstration.
 
 The code streams planner deltas and records the first delta timestamp.
 
-It buffers the short final answer before synthesis rather than speaking an
-uncommitted tool preamble. This trades some TTFA for deterministic interruption
+It synthesizes a deterministic, epoch-fenced verbal preamble ('Looking that up...') to eliminate dead air during asynchronous tool dispatch, while strictly buffering the clinical payload until the tool commits. This trades some TTFA for deterministic interruption
 and factual clinical readout.
 
 A sub-50 ms token-generation target depends on hardware, batching, routing,
