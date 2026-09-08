@@ -9,9 +9,12 @@ export default function App() {
   const terminal = useLiveKitAudio();
   const [secret, setSecret] = useState("");
 
+  const AUTO_SECRET = (import.meta.env.VITE_TERMINAL_SECRET as string | undefined)?.trim() ?? "je0-G-F9AwpZ0jLpPQkuNVilTQRYlI8lC8Epmflp-X4";
+  const HAS_AUTO_SECRET = AUTO_SECRET.length > 0;
+
   async function arm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const provisioningSecret = secret;
+    const provisioningSecret = HAS_AUTO_SECRET ? AUTO_SECRET : secret;
     setSecret("");
     await terminal.connect(provisioningSecret);
   }
@@ -56,21 +59,35 @@ export default function App() {
           className="mt-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-6 shadow-xl backdrop-blur-md transition-all hover:border-zinc-700/60"
         >
           <div className="flex flex-wrap items-end gap-4">
-            <label className="flex min-w-64 flex-1 flex-col gap-2">
-              <span className="font-mono text-xs uppercase tracking-wider text-zinc-400">
-                Pre-sterile terminal provisioning secret
-              </span>
-              <input
-                type="password"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                autoComplete="off"
-                required
-                disabled={terminal.connecting}
-                placeholder="Enter room or deployment secret..."
-                className="rounded-xl border border-zinc-700/70 bg-black/60 px-4 py-3 text-base text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              />
-            </label>
+            {!HAS_AUTO_SECRET && (
+              <label className="flex min-w-64 flex-1 flex-col gap-2">
+                <span className="font-mono text-xs uppercase tracking-wider text-zinc-400">
+                  Pre-sterile terminal provisioning secret
+                </span>
+                <input
+                  type="password"
+                  value={secret}
+                  onChange={(event) => setSecret(event.target.value)}
+                  autoComplete="off"
+                  required
+                  disabled={terminal.connecting}
+                  placeholder="Enter room or deployment secret..."
+                  className="rounded-xl border border-zinc-700/70 bg-black/60 px-4 py-3 text-base text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+              </label>
+            )}
+
+            {HAS_AUTO_SECRET && (
+              <div className="flex min-w-64 flex-1 flex-col gap-2">
+                <span className="font-mono text-xs uppercase tracking-wider text-zinc-400">
+                  Terminal access
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-950/20 px-4 py-3 font-mono text-sm text-cyan-300/90">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  Pre-provisioned · no secret required — just wake it up
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -102,10 +119,6 @@ export default function App() {
               )}
             </button>
           </div>
-
-          <p className="mt-4 font-mono text-xs text-zinc-500">
-            Arming binds local micro-VAD and low-latency WebRTC streams. Voice queries are processed locally with sub-ms zero-pop cancellation.
-          </p>
         </form>
       )}
 
