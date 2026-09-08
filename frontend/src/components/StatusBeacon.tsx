@@ -19,7 +19,7 @@ const states: Record<
     badgeBg: "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
   },
   user: {
-    label: "ScrubSync Speaking",
+    label: "ScrubSync listening",
     border: "border-emerald-400 bg-emerald-950/25",
     text: "text-emerald-300",
     glow: "0 0 80px rgba(52, 211, 153, 0.35)",
