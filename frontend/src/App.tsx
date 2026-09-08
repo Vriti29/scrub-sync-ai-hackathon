@@ -47,7 +47,7 @@ export default function App() {
             </span>
           </div>
           <p className="mt-2 text-xs font-mono tracking-tight text-zinc-500">
-            Clinical Telemetry & Critical Voice Engine
+            Critical Voice Engine
           </p>
         </div>
       </header>
@@ -157,7 +157,7 @@ export default function App() {
               <p className="mt-1 min-h-12 text-xl font-medium text-zinc-100">
                 {terminal.transcript ||
                   terminal.tool ||
-                  "Awaiting voice command (e.g. 'Check electrolytes for DEMO-001')…"}
+                  "Awaiting voice command"}
               </p>
             </div>
 
