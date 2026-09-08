@@ -51,6 +51,9 @@ const states: Record<
 export function StatusBeacon({ state }: { state: VoiceState }) {
   const current = states[state];
   const isOnline = state !== "offline";
+  const isActive = state === "speaking" || state === "user" || state === "tool";
+  // Symmetric waveform heights used when the beacon is actively engaged.
+  const waveHeights = ["h-3", "h-6", "h-9", "h-11", "h-9", "h-6", "h-3"];
 
   return (
     <section
@@ -66,20 +69,57 @@ export function StatusBeacon({ state }: { state: VoiceState }) {
           <div className="absolute inset-0 rounded-full animate-ping opacity-20 border border-cyan-400" />
         )}
 
-        <div className="text-center z-10">
-          <div className="font-mono text-6xl font-black tracking-tight text-white drop-shadow-md">
-            200
-          </div>
-          <div className="mt-2 font-mono text-[11px] font-bold tracking-[0.35em] text-zinc-400 uppercase">
-            Voice Native
-          </div>
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          {/* Gradient microphone icon — breathes while online */}
+          <svg
+            width="58"
+            height="58"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className={`drop-shadow-[0_0_12px_rgba(6,182,212,0.5)] ${
+              isOnline ? "animate-pulse" : "opacity-50"
+            }`}
+          >
+            <defs>
+              <linearGradient id="beaconMicGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#22d3ee" />
+                <stop offset="100%" stopColor="#34d399" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M12 15.5a3.25 3.25 0 0 1-3.25-3.25V5a3.25 3.25 0 0 1 6.5 0v7.25A3.25 3.25 0 0 1 12 15.5Z"
+              stroke="url(#beaconMicGrad)"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M18.5 12.25a6.5 6.5 0 0 1-13 0M12 18.75V22M8.5 22h7"
+              stroke="url(#beaconMicGrad)"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
 
-          {/* Dynamic Audio Bars Simulation */}
-          <div className="mt-4 flex items-center justify-center gap-1.5 h-6">
-            <span className={`w-1 rounded-full bg-cyan-400 transition-all duration-150 ${state === "speaking" ? "h-6 animate-pulse" : state === "user" ? "h-4" : "h-1.5 opacity-30"}`} />
-            <span className={`w-1 rounded-full bg-cyan-400 transition-all duration-150 ${state === "speaking" ? "h-8 animate-bounce" : state === "user" ? "h-5" : "h-1.5 opacity-30"}`} />
-            <span className={`w-1 rounded-full bg-cyan-400 transition-all duration-150 ${state === "speaking" ? "h-4 animate-pulse" : state === "user" ? "h-3" : "h-1.5 opacity-30"}`} />
-            <span className={`w-1 rounded-full bg-cyan-400 transition-all duration-150 ${state === "speaking" ? "h-7 animate-bounce" : state === "user" ? "h-6" : "h-1.5 opacity-30"}`} />
+          {/* State-reactive gradient equalizer */}
+          <div className="flex h-12 items-end justify-center gap-1.5">
+            {waveHeights.map((h, i) => (
+              <span
+                key={i}
+                className={[
+                  "w-1.5 rounded-full bg-gradient-to-t from-cyan-500 via-cyan-300 to-emerald-300 transition-all duration-300",
+                  isActive ? h : "h-1.5 opacity-25",
+                  state === "speaking"
+                    ? "animate-bounce"
+                    : isActive
+                      ? "animate-pulse"
+                      : ""
+                ].join(" ")}
+                style={{ animationDelay: `${i * 80}ms` }}
+              />
+            ))}
           </div>
         </div>
       </div>
