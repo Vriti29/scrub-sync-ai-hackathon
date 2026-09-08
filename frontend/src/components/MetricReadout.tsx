@@ -7,14 +7,34 @@ export function MetricReadout({
 }) {
   if (!result) {
     return (
-      <section className="panel flex min-h-80 flex-col justify-center">
-        <p className="eyebrow">Latest authorized result</p>
-        <p className="mt-8 text-4xl font-semibold text-zinc-200">
-          Awaiting voice request
-        </p>
-        <p className="mt-6 text-lg text-zinc-500">
-          “Check electrolytes.” Then interrupt: “Check blood gas pH instead.”
-        </p>
+      <section className="flex min-h-80 flex-col justify-center rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-8 backdrop-blur-md shadow-xl">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <span className="font-mono text-xs uppercase tracking-widest text-cyan-400">
+            Telemetry Vitals · EHR Core
+          </span>
+          <span className="rounded bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+            DEMO-001 SYNTHETIC
+          </span>
+        </div>
+
+        <div className="my-6">
+          <p className="text-3xl font-bold tracking-tight text-zinc-100">
+            Awaiting Voice Request
+          </p>
+          <p className="mt-2 text-sm text-zinc-400">
+            Speak a clinical order or vital panel check to populate real-time diagnostics:
+          </p>
+        </div>
+
+        {/* Quick Suggestion Chips */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-zinc-800/60">
+          <span className="rounded-lg border border-cyan-500/20 bg-cyan-950/30 px-3 py-1.5 font-mono text-xs text-cyan-300">
+            "Check electrolytes for DEMO-001"
+          </span>
+          <span className="rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-1.5 font-mono text-xs text-zinc-300">
+            "Check arterial blood gas pH"
+          </span>
+        </div>
       </section>
     );
   }
@@ -23,34 +43,52 @@ export function MetricReadout({
   const metric = potassium ? result.potassium : result.ph;
   if (!metric) return null;
 
+  const isAcidosis = !potassium && metric.value < 7.35;
+
   return (
-    <section className="panel min-h-80" aria-label="Synthetic clinical result">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="eyebrow">
-          {potassium ? "Potassium · K+" : "Arterial blood gas · pH"}
-        </p>
-        <span className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-bold uppercase tracking-wider text-zinc-300">
-          Synthetic demo
+    <section
+      className="min-h-80 rounded-2xl border border-cyan-500/30 bg-zinc-900/40 p-8 backdrop-blur-md shadow-2xl relative overflow-hidden"
+      aria-label="Synthetic clinical result"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+        <span className="font-mono text-xs uppercase tracking-widest text-cyan-400">
+          {potassium ? "Serum Electrolyte Panel · K+" : "Arterial Blood Gas Analysis · pH"}
+        </span>
+        <span className="rounded-full border border-cyan-500/30 bg-cyan-950/60 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+          Synthetic OR Record
         </span>
       </div>
-      <div className="mt-7 flex flex-wrap items-baseline gap-5">
-        <span className="font-mono text-[clamp(5rem,10vw,9rem)] font-black leading-none tracking-tighter text-white">
+
+      <div className="mt-6 flex flex-wrap items-baseline gap-4">
+        <span className="font-mono text-[clamp(4.5rem,8vw,8rem)] font-black leading-none tracking-tighter text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
           {potassium ? metric.value.toFixed(1) : metric.value.toFixed(2)}
         </span>
-        <span className="font-mono text-3xl text-zinc-400">
+        <span className="font-mono text-2xl font-semibold text-zinc-400">
           {metric.unit}
         </span>
       </div>
-      <div className="mt-7 inline-block rounded-lg border border-white/20 bg-white/[0.06] px-5 py-3 text-2xl font-extrabold tracking-wide text-white">
-        {metric.flag}
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 font-mono text-lg font-black tracking-wide ${
+            isAcidosis
+              ? "bg-rose-500/20 border border-rose-500/60 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.25)]"
+              : "bg-emerald-500/20 border border-emerald-500/60 text-emerald-300"
+          }`}
+        >
+          <span className={`h-2 w-2 rounded-full ${isAcidosis ? "bg-rose-500 animate-ping" : "bg-emerald-400"}`} />
+          {metric.flag}
+        </div>
+
+        {!potassium && result.pco2 && (
+          <div className="rounded-xl border border-zinc-700/60 bg-zinc-800/50 px-4 py-2 font-mono text-lg text-zinc-200">
+            pCO₂ <span className="font-bold text-white">{result.pco2.value}</span> {result.pco2.unit}
+          </div>
+        )}
       </div>
-      {!potassium && result.pco2 && (
-        <p className="mt-5 font-mono text-2xl text-zinc-200">
-          pCO₂ {result.pco2.value} {result.pco2.unit}
-        </p>
-      )}
-      <p className="mt-5 text-sm text-zinc-500">
-        Fixture flag, not a validated diagnostic or treatment recommendation.
+
+      <p className="mt-6 font-mono text-[11px] text-zinc-500 border-t border-zinc-800/60 pt-3">
+        Synthetic test fixture · High-fidelity OR demonstrator only.
       </p>
     </section>
   );
