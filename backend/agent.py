@@ -1229,10 +1229,15 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    # Bind the worker's built-in health server to Render's injected PORT so the
+    # agent can run as a free Web Service (Render Background Workers are paid).
+    # Locally, PORT is usually unset and the worker falls back to its default.
     agents.cli.run_app(
         agents.WorkerOptions(
             agent_name="scrubsync",
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
+            host="0.0.0.0",
+            port=int(os.getenv("PORT") or os.getenv("AGENT_HEALTH_PORT") or 8081),
         )
     )
