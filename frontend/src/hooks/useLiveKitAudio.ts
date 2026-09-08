@@ -250,7 +250,7 @@ export function useLiveKitAudio() {
         await context.audioWorklet.addModule("/duplex-gate.js");
 
         const tokenResponse = await fetch(
-          import.meta.env.VITE_TOKEN_URL || "http://localhost:8080/token",
+          "https://scrub-sync-ai-hackathon.onrender.com/token",
           {
             method: "POST",
             headers: {
