@@ -19,21 +19,21 @@ const states: Record<
     badgeBg: "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
   },
   user: {
-    label: "Surgeon Speaking",
+    label: "ScrubSync Speaking",
     border: "border-emerald-400 bg-emerald-950/25",
     text: "text-emerald-300",
     glow: "0 0 80px rgba(52, 211, 153, 0.35)",
     badgeBg: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
   },
   tool: {
-    label: "Querying Clinical Core",
+    label: "ScrubSync thinking",
     border: "border-amber-400/80 bg-amber-950/20",
     text: "text-amber-300",
     glow: "0 0 70px rgba(251, 191, 36, 0.3)",
     badgeBg: "bg-amber-500/20 text-amber-300 border border-amber-500/40"
   },
   speaking: {
-    label: "ScrubSync Audio Active",
+    label: "ScrubSync Speaking",
     border: "border-cyan-400 bg-cyan-900/30",
     text: "text-cyan-100",
     glow: "0 0 100px rgba(6, 182, 212, 0.45)",
