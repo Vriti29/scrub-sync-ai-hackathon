@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Logo } from "./components/Logo";
 import { MetricReadout } from "./components/MetricReadout";
 import { StatusBeacon } from "./components/StatusBeacon";
 import { Telemetry } from "./components/Telemetry";
@@ -32,9 +33,12 @@ export default function App() {
             <span className="font-mono text-xs text-zinc-500">v1.0-CLINICAL-ALPHA</span>
           </div>
 
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-zinc-100 lg:text-5xl">
-            ScrubSync <span className="text-cyan-400">AI</span>
-          </h1>
+          <div className="mt-3 flex items-center gap-3">
+            <Logo className="h-11 w-11 shrink-0 drop-shadow-[0_0_14px_rgba(6,182,212,0.35)] lg:h-12 lg:w-12" />
+            <h1 className="text-4xl font-black tracking-tight text-zinc-100 lg:text-5xl">
+              ScrubSync <span className="text-cyan-400">AI</span>
+            </h1>
+          </div>
         </div>
 
         <div className="text-right">
