@@ -122,10 +122,6 @@ export default function App() {
               )}
             </button>
           </div>
-
-          <p className="mt-4 font-mono text-xs text-zinc-500">
-            Arming binds local micro-VAD and low-latency WebRTC streams. Voice queries are processed locally with sub-ms zero-pop cancellation.
-          </p>
         </form>
       )}
 
