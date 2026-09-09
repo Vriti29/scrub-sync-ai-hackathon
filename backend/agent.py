@@ -28,45 +28,61 @@ load_dotenv()
 log = logging.getLogger("scrubsync.agent")
 
 SYSTEM_PROMPT = """
-You are ScrubSync AI, a friendly general-purpose voice assistant. Answer
-questions about almost anything: health tips, life advice, recipes, sports,
-travel, tech, study help, jokes, and everyday tasks.
+You are ScrubSync AI, a friendly general-purpose voice assistant.
+Answer questions about almost anything: health tips, personal life advice,
+food recipes, sports, travel, tech, study help, jokes, and everyday tasks.
 
-Memory:
-- You have active memory of this session. Recall any detail, name, number,
-  flight, schedule, preference, or fact the user shared earlier — even after a
-  topic change — and answer directly from the conversation history.
-- Never say you lack access to personal information or cannot remember within
-  this active session.
+You MUST remember and reference all details, facts, numbers, and personal context mentioned by the user in previous turns of this session.
+Never state that you do not retain or have access to personal information during an ongoing session.
+
 
 Style:
-- Speak naturally for voice: clear, warm, concise. Usually 4 to 8 short
-  sentences unless more detail is asked.
-- No throat-clearing ("Sure!", "Let me see", "I'd be happy to help"). Deliver
-  the core answer or fact in the first sentence. Be practical and specific.
+- Speak naturally for voice: clear, warm, and concise.
+- Usually 4 to 8 short sentences unless the user asks for more detail.
+- Be practical and specific. Prefer useful next steps over fluff.
 
-Tools (call at most one per turn; prefer answering directly when you know):
-- web_search for live or changing facts: scores, news, weather, prices, current
-  events, or anything that may be outdated in memory.
-- check_electrolytes / check_abg only for synthetic DEMO-001 lab requests.
+Response Speed & Style:
+- Respond in direct, crisp sentences without conversational throat-clearing (e.g., do not say 'Sure!', 'Let me see...', or 'I'd be happy to help').
+- Deliver the core answer or fact immediately in the first sentence.
 
-Behavior:
-- Soft pause/resume ("stop", "pause", "continue", "resume") is handled by the
-  runtime; you will not see those turns. On interrupt or "leave it", abandon the
-  previous topic and address the new request.
-- Readback: if asked to "repeat" or for a value just reported (e.g. "what was
-  that pH?"), restate the confirmed value immediately without rerunning a tool.
-- Self-correction: if the user corrects mid-sentence ("Check A, wait, no, B"),
-  answer ONLY the corrected target.
-- Timers: if asked to start/track a procedure timer, acknowledge with
-  "[Time] timer running"; give brief direct status updates on request.
+Tools:
+- Use web_search for live or changing facts: cricket/football scores, news,
+  weather, prices, current events, or anything that may be outdated in memory.
+- Use check_electrolytes / check_abg only for synthetic DEMO-001 lab requests.
+- Call at most one tool per turn. Prefer answering directly when knowledge is enough.
 
+Memory & Continuity:
+- Remember all previous context, patient details, and topics discussed earlier in this session.
+- Soft pause/resume ("stop", "pause", "continue", "go on", "resume") is handled by the voice runtime without asking you; you will not see those turns.
+- If the user interrupts, changes the subject, or says "leave it", immediately abandon the previous topic and address the new request.
+
+CRITICAL SESSION MEMORY RULES:
+- You have an active memory of this conversation.
+- You MUST recall any detail, name, flight, schedule, or fact the user shared earlier in the chat, even if the user temporarily changed the topic.
+- If the user asks about previously provided info (e.g., 'What is my flight time?', 'What is my name?'), check the conversation history and answer directly.
+- NEVER say 'I don't have access to personal information' or 'I don't remember' within this active session.
+
+Context & Recall:
+- You remember all details, names, flight timings, preferences, and clinical/daily facts shared by the user earlier in this conversation session.
+- If the user asks about something they told you previously (e.g. flight time, personal notes), answer them directly using the conversation history. Never claim you lack memory or cannot remember within the active session.
+
+Readback & Verification Protocol:
+- If the operator asks to "repeat", "say again", or asks for a specific value just reported (e.g. "what was that pH?"), state the confirmed value immediately without rerunning the tool.
+
+Mid-Utterance Self-Correction:
+- If the user changes their mind or self-corrects in a single sentence (e.g., "Tell me X—actually make that Y" or "Check A, wait, no, check B"), completely ignore the first request and directly answer ONLY the corrected target (Y or B).
+
+Procedure Timing & Status:
+- If the operator asks to start a timer, count down, or log elapsed time for a procedure (e.g., bone cement, tourniquet, clamp), acknowledge it immediately with: "[Time] timer running."
+- If asked for status, elapsed time, or remaining time, give a direct, brief spoken update.
+    
 Safety:
 - You are not a licensed clinician, lawyer, or financial advisor.
 - For medical red flags (chest pain, stroke signs, severe breathing trouble,
   suicidal thoughts, anaphylaxis), urge emergency care immediately.
-- Do not invent live scores, news, prices, or exact drug dosing. If unsure, use
-  web_search or say so. For cancel with no replacement, say: "Cancelled."
+- Do not invent live scores, news, or prices. If unsure, use web_search or say so.
+- Do not invent prescription drug regimens with exact dosing as medical orders.
+- For cancel with no replacement request, say: "Cancelled."
 """.strip()
 
 MAX_SPOKEN_WORDS = int(os.getenv("MAX_SPOKEN_WORDS", "110"))
@@ -764,10 +780,6 @@ class VoiceAssistant:
         calls: dict[str, tuple[str, str]] = {}
         first_token = True
         started = time.perf_counter_ns()
-        # Once a pure direct answer starts arriving (content, no tool call), we
-        # stream it straight into TTS so the first sentence is spoken while the
-        # model is still generating — no waiting for the whole completion.
-        speech: tuple[_AudioBuffer, Any, asyncio.Task[Any]] | None = None
 
         async with asyncio.timeout(25):
             stream = self.llm.chat(chat_ctx=context, tools=tools)
@@ -784,30 +796,10 @@ class VoiceAssistant:
                             epoch=epoch,
                             elapsed_ms=(time.perf_counter_ns() - started) / 1e6,
                         )
-                    # Tool calls are only honoured before we commit to speaking.
-                    if speech is None:
-                        for call in delta.tool_calls or []:
-                            calls[call.call_id] = (call.name, call.arguments)
-                    if delta.content and not calls:
+                    if delta.content:
                         text_parts.append(delta.content)
-                        if speech is None:
-                            speech = self._begin_stream_speech(epoch)
-                        _buf, _ts, _play = speech
-                        _ts.push_text(delta.content)
-                        _buf.text = "".join(text_parts)
-                        if len(_buf.text.split()) >= MAX_SPOKEN_WORDS:
-                            break
-
-        if speech is not None:
-            buf, tts_stream, play_task = speech
-            spoken = " ".join(
-                "".join(text_parts).split()[:MAX_SPOKEN_WORDS]
-            ).strip()
-            buf.text = spoken or buf.text
-            tts_stream.end_input()
-            self._remember(transcript, spoken)
-            await play_task
-            return
+                    for call in delta.tool_calls or []:
+                        calls[call.call_id] = (call.name, call.arguments)
 
         self.epochs.assert_current(epoch)
         if len(calls) > 1:
@@ -860,10 +852,9 @@ class VoiceAssistant:
                     result = await search_web(query)
                     self.epochs.assert_current(epoch)
                     self.audit.write("tool_committed", epoch=epoch, tool=name, result=result)
-                    # Streams the grounded summary straight into TTS and speaks it.
-                    spoken = await self._speak_search_answer(epoch, transcript, result)
-                    self._remember(transcript, spoken)
-                    return
+                    spoken = await self._speakable_from_search(epoch, transcript, result)
+                    if spoken:
+                        self._remember(transcript, spoken)
                 else:
                     spoken = "That tool is unavailable right now."
                     await self.speak(epoch, spoken)
@@ -881,26 +872,19 @@ class VoiceAssistant:
             await self.speak(epoch, spoken)
             self._remember(transcript, spoken)
 
-    async def _speak_search_answer(
+    async def _speakable_from_search(
         self,
         epoch: int,
         transcript: str,
         result: dict[str, Any],
     ) -> str:
-        """Stream a grounded spoken answer from web evidence into TTS.
-
-        The summarizing tokens are pushed into Rime as they arrive, so the
-        answer starts playing before the model finishes. Returns the full
-        spoken text for session memory.
-        """
+        """Turn web search payload into a short spoken answer."""
         self.epochs.assert_current(epoch)
         if not result.get("ok"):
-            spoken = (
+            return (
                 "I could not find reliable live info just now. "
                 "Ask another way, or try again in a moment."
             )
-            await self.speak(epoch, spoken)
-            return spoken
 
         snippets: list[str] = []
         summary = str(result.get("summary") or "").strip()
@@ -929,7 +913,6 @@ class VoiceAssistant:
             ),
         )
 
-        buf, tts_stream, play_task = self._begin_stream_speech(epoch)
         text_parts: list[str] = []
         async with asyncio.timeout(20):
             stream = self.llm.chat(chat_ctx=context, tools=[])
@@ -940,24 +923,13 @@ class VoiceAssistant:
                     if delta is None or not delta.content:
                         continue
                     text_parts.append(delta.content)
-                    tts_stream.push_text(delta.content)
-                    buf.text = "".join(text_parts)
-                    if len(buf.text.split()) >= MAX_SPOKEN_WORDS:
-                        break
 
         spoken = " ".join("".join(text_parts).split()[:MAX_SPOKEN_WORDS]).strip()
-        if not spoken:
-            # Nothing usable from the model: fall back to the raw summary.
-            spoken = (
-                summary[:400]
-                if summary
-                else "I found some results, but could not summarize them clearly."
-            )
-            tts_stream.push_text(spoken)
-        buf.text = spoken
-        tts_stream.end_input()
-        await play_task
-        return spoken
+        return spoken or (
+            summary[:400]
+            if summary
+            else "I found some results, but could not summarize them clearly."
+        )
 
     def _remember(self, user_text: str, assistant_text: str) -> None:
         self._history.append(("user", user_text[:4000]))
@@ -1015,76 +987,6 @@ class VoiceAssistant:
 
         self._synth_task = self.spawn(fill())
         return buf
-
-    def _new_synthesis(self) -> tuple[_AudioBuffer, Any]:
-        """Open a streaming Rime synthesis fed incrementally by the caller.
-
-        Returns the growing PCM buffer plus the Rime ``SynthesizeStream``; push
-        LLM tokens with ``stream.push_text(...)`` as they arrive and finish with
-        ``stream.end_input()``. Frames land in ``buf`` the same way as the
-        fixed-text path, so pause/resume (which is sample-cursor based) is
-        unchanged — the buffer just grows while playout is already underway.
-        """
-        self._discard_pending_audio()
-        buf = _AudioBuffer("")
-        tts_stream = self.tts.stream()
-        started_ns = time.perf_counter_ns()
-
-        async def fill() -> None:
-            first = True
-            try:
-                async with asyncio.timeout(60):
-                    async for event in tts_stream:
-                        frame = event.frame
-                        if (
-                            frame.sample_rate != buf.sample_rate
-                            or frame.num_channels != 1
-                        ):
-                            raise RuntimeError(
-                                "Rime returned an unexpected PCM configuration."
-                            )
-                        if first:
-                            first = False
-                            self.audit.write(
-                                "rime_first_pcm",
-                                text_preview=buf.text[:80],
-                                elapsed_ms=(
-                                    time.perf_counter_ns() - started_ns
-                                ) / 1e6,
-                                streaming=True,
-                            )
-                        buf.frames.append(frame)
-                        buf.total_samples += frame.samples_per_channel
-            except asyncio.CancelledError:
-                buf.failed = True
-                raise
-            except Exception:
-                buf.failed = True
-                log.exception("Rime streaming synthesis failed")
-            finally:
-                buf.complete.set()
-                try:
-                    await tts_stream.aclose()
-                except Exception:
-                    pass
-
-        self._synth_task = self.spawn(fill())
-        return buf, tts_stream
-
-    def _begin_stream_speech(
-        self, epoch: int
-    ) -> tuple[_AudioBuffer, Any, asyncio.Task[Any]]:
-        """Start streaming synthesis and begin playing it out concurrently.
-
-        Playout runs as a fenced background task so the LLM can keep generating
-        (and pushing tokens) while the first sentence is already being spoken.
-        The caller awaits the returned task once it has pushed all tokens.
-        """
-        buf, tts_stream = self._new_synthesis()
-        play_task = self.spawn(
-            self.epochs.run_fenced_task(epoch, self._play_buffer(epoch, buf, 0))
-        )
-        return buf, tts_stream, play_task
 
     async def speak(self, epoch: int, text: str) -> None:
         """Speak a fresh answer, buffering PCM so stop/continue can replay it."""
