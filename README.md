@@ -1,5 +1,5 @@
 # ScrubSync AI
-### 🎥 Demo Video: [Watch Here]([https://your-drive-or-youtube-link](https://drive.google.com/file/d/1mSr-o5F15n3zsq9Txy_QzlcSX58JBPD_/view?usp=sharing))
+### 🎥 Demo Video: [Watch Here](https://drive.google.com/file/d/1mSr-o5F15n3zsq9Txy_QzlcSX58JBPD_/view?usp=sharing)
 
 **Team HTTP200 · DataForge Hackathon · IIT Kharagpur · Rime Track**
 
